@@ -63,9 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
             clientX = e.touches[0].clientX;
             clientY = e.touches[0].clientY;
         }
+        
+        // Calculate scaling factors because CSS scales the canvas on mobile
+        const scaleX = drawingCanvas.width / rect.width;
+        const scaleY = drawingCanvas.height / rect.height;
+        
         return {
-            x: clientX - rect.left,
-            y: clientY - rect.top
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
         };
     }
 
