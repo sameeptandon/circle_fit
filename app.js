@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDrawing = false;
     let mode = 'pen'; // 'pen' or 'eraser'
     let showCircle = true;
-    let fitType = 'algebraic';
+    let fitType = 'geometric';
     const brushSize = 5;
     const eraserSize = 20;
 
