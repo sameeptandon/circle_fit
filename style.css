@@ -33,8 +33,8 @@ body {
     border-radius: 16px;
     box-shadow: var(--canvas-shadow);
     overflow: hidden;
-    width: 800px;
-    max-width: 100%;
+    width: 100%;
+    max-width: 800px;
 }
 
 .toolbar {
@@ -49,6 +49,7 @@ body {
 .tools-left {
     display: flex;
     gap: 12px;
+    flex-wrap: wrap;
 }
 
 .tool-btn {
@@ -116,8 +117,10 @@ body {
 
 .canvas-container {
     position: relative;
-    width: 800px;
-    height: 550px;
+    width: 100%;
+    max-width: 800px;
+    aspect-ratio: 800 / 550;
+    height: auto;
     background-color: #ffffff;
     cursor: crosshair;
     touch-action: none;
@@ -152,4 +155,24 @@ canvas {
     padding: 4px 8px;
     border-radius: 6px;
     margin-left: 8px;
+}
+
+@media (max-width: 600px) {
+    .toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 12px 16px;
+    }
+    .tools-left {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    .stats-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .version-badge {
+        margin-left: auto;
+    }
 }
