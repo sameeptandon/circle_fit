@@ -27,6 +27,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const brushSize = 5;
     const eraserSize = 20;
 
+    let clusters = [];
+    let currentCluster = null;
+    let lastPos = null;
+
     // Tool switching
     btnPen.addEventListener('click', () => {
         mode = 'pen';
@@ -43,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnClear.addEventListener('click', () => {
         dCtx.fillStyle = '#ffffff';
         dCtx.fillRect(0, 0, width, height);
+        clusters = [];
         updateShapeFit();
     });
 
@@ -51,6 +56,10 @@ document.addEventListener('DOMContentLoaded', () => {
             shapeType = 'triangle';
             btnShapeType.textContent = 'Shape: Triangle';
             btnFitType.disabled = true;
+        } else if (shapeType === 'triangle') {
+            shapeType = 'auto';
+            btnShapeType.textContent = 'Shape: Auto';
+            btnFitType.disabled = false;
         } else {
             shapeType = 'circle';
             btnShapeType.textContent = 'Shape: Circle';
@@ -108,6 +117,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.cancelable) e.preventDefault(); // prevent scrolling
         isDrawing = true;
         const pos = getMousePos(e);
+        lastPos = pos;
+        
+        if (mode === 'pen') {
+            currentCluster = {
+                points: [],
+                shapeType: shapeType,
+                fitType: fitType
+            };
+            clusters.push(currentCluster);
+            currentCluster.points.push(pos);
+        } else if (mode === 'eraser') {
+            erasePoints(pos);
+        }
+
         dCtx.beginPath();
         dCtx.moveTo(pos.x, pos.y);
         dCtx.lineCap = 'round';
@@ -128,6 +151,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isDrawing) return;
         if (e.cancelable) e.preventDefault(); // prevent scrolling
         const pos = getMousePos(e);
+        
+        if (mode === 'pen' && currentCluster) {
+            addInterpolatedPoints(currentCluster, lastPos, pos);
+        } else if (mode === 'eraser') {
+            addInterpolatedErase(lastPos, pos);
+        }
+        lastPos = pos;
+        
         dCtx.strokeStyle = mode === 'pen' ? '#000000' : '#ffffff';
         dCtx.lineWidth = mode === 'pen' ? brushSize : eraserSize;
         dCtx.lineTo(pos.x, pos.y);
@@ -138,6 +169,44 @@ document.addEventListener('DOMContentLoaded', () => {
     function stopDrawing() {
         if (isDrawing) {
             isDrawing = false;
+            currentCluster = null;
+        }
+    }
+
+    function addInterpolatedPoints(cluster, p1, p2) {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const steps = Math.max(1, Math.ceil(dist));
+        for (let i = 1; i <= steps; i++) {
+            cluster.points.push({
+                x: p1.x + (dx * i) / steps,
+                y: p1.y + (dy * i) / steps
+            });
+        }
+    }
+
+    function addInterpolatedErase(p1, p2) {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const steps = Math.max(1, Math.ceil(dist / (eraserSize / 4)));
+        for (let i = 0; i <= steps; i++) {
+            erasePoints({
+                x: p1.x + (dx * i) / steps,
+                y: p1.y + (dy * i) / steps
+            });
+        }
+    }
+
+    function erasePoints(pos) {
+        const radiusSq = (eraserSize / 2) * (eraserSize / 2);
+        for (const cluster of clusters) {
+            cluster.points = cluster.points.filter(p => {
+                const dx = p.x - pos.x;
+                const dy = p.y - pos.y;
+                return (dx*dx + dy*dy) > radiusSq;
+            });
         }
     }
 
@@ -150,24 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('mouseup', stopDrawing);
     window.addEventListener('touchend', stopDrawing);
     window.addEventListener('touchcancel', stopDrawing);
-
-    function getDrawnPoints() {
-        const imgData = dCtx.getImageData(0, 0, width, height);
-        const data = imgData.data;
-        const points = [];
-
-        // Canvas anti-aliasing creates dark gray edges, so use a tolerance.
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const i = (y * width + x) * 4;
-                if (data[i] < 50 && data[i+1] < 50 && data[i+2] < 50) {
-                    points.push({x, y});
-                }
-            }
-        }
-
-        return points;
-    }
 
     function distanceToSegment(p, a, b) {
         const vx = b.x - a.x;
@@ -335,24 +386,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return equilateralVertices(simplex[bestIndex]);
     }
 
-    function drawTriangleFit(points) {
+    function getTriangleFitData(cluster) {
+        const points = cluster.points;
         const triangle = fitEquilateralTriangle(points);
-        if (!triangle) {
-            percentDisplay.textContent = '0.0%';
-            return;
-        }
-
-        if (showShape) {
-            oCtx.beginPath();
-            oCtx.moveTo(triangle[0].x, triangle[0].y);
-            oCtx.lineTo(triangle[1].x, triangle[1].y);
-            oCtx.lineTo(triangle[2].x, triangle[2].y);
-            oCtx.closePath();
-            oCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-            oCtx.lineWidth = brushSize;
-            oCtx.lineJoin = 'round';
-            oCtx.stroke();
-        }
+        if (!triangle) return null;
 
         let intersectingCount = 0;
         for (const point of points) {
@@ -364,30 +401,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 intersectingCount++;
             }
         }
-
-        const percent = (intersectingCount / points.length) * 100;
-        percentDisplay.textContent = percent.toFixed(1) + '%';
+        return { shape: 'triangle', data: triangle, score: intersectingCount };
     }
 
-    function updateShapeFit() {
-        oCtx.clearRect(0, 0, width, height);
-        const points = getDrawnPoints();
-
-        if (points.length <= 3) {
-            percentDisplay.textContent = '0.0%';
-            return;
-        }
-
-        if (shapeType === 'triangle') {
-            drawTriangleFit(points);
-            return;
-        }
-
-        // Build 3x3 matrix M and vector V
+    function getCircleFitData(cluster) {
+        const points = cluster.points;
         let m00 = 0, m01 = 0, m02 = 0;
-        let m10 = 0, m11 = 0, m12 = 0;
-        let m20 = 0, m21 = 0, m22 = 0;
-        
+        let m11 = 0, m12 = 0, m22 = 0;
         let v0 = 0, v1 = 0, v2 = 0;
 
         for (let i = 0; i < points.length; i++) {
@@ -400,10 +420,8 @@ document.addEventListener('DOMContentLoaded', () => {
             m00 += 4 * x2;
             m01 += 4 * x * y;
             m02 += 2 * x;
-            
             m11 += 4 * y2;
             m12 += 2 * y;
-            
             m22 += 1;
 
             v0 += 2 * x * bi;
@@ -411,20 +429,10 @@ document.addEventListener('DOMContentLoaded', () => {
             v2 += bi;
         }
 
-        // Matrix is symmetric
-        m10 = m01;
-        m20 = m02;
-        m21 = m12;
+        const m10 = m01, m20 = m02, m21 = m12;
+        const det = m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20) + m02 * (m10 * m21 - m11 * m20);
 
-        // Invert 3x3 matrix using determinant and adjugate
-        const det = m00 * (m11 * m22 - m12 * m21) 
-                  - m01 * (m10 * m22 - m12 * m20) 
-                  + m02 * (m10 * m21 - m11 * m20);
-
-        if (Math.abs(det) < 1e-10) {
-            percentDisplay.textContent = '0.0%';
-            return;
-        }
+        if (Math.abs(det) < 1e-10) return null;
 
         const inv00 =  (m11 * m22 - m12 * m21) / det;
         const inv01 = -(m01 * m22 - m02 * m21) / det;
@@ -438,105 +446,145 @@ document.addEventListener('DOMContentLoaded', () => {
         const inv21 = -(m00 * m21 - m01 * m20) / det;
         const inv22 =  (m00 * m11 - m01 * m10) / det;
 
-        // Compute c = M^-1 * V
         let xc = inv00 * v0 + inv01 * v1 + inv02 * v2;
         let yc = inv10 * v0 + inv11 * v1 + inv12 * v2;
         let w  = inv20 * v0 + inv21 * v1 + inv22 * v2;
 
         let rSq = w + xc * xc + yc * yc;
+        if (rSq <= 0) return null;
 
-        if (rSq > 0) {
-            let r = Math.sqrt(rSq);
-            
-            if (fitType === 'geometric') {
-                for (let iter = 0; iter < 10; iter++) {
-                    let j00 = 0, j01 = 0, j02 = 0;
-                    let j11 = 0, j12 = 0, j22 = 0;
-                    let f0 = 0, f1 = 0, f2 = 0;
-                    
-                    let validPoints = 0;
-                    for (let i = 0; i < points.length; i++) {
-                        const dx = xc - points[i].x;
-                        const dy = yc - points[i].y;
-                        const d = Math.sqrt(dx*dx + dy*dy);
-                        if (d === 0) continue;
-                        
-                        validPoints++;
-                        const j0 = dx / d;
-                        const j1 = dy / d;
-                        const j2 = -1;
-                        const f = d - r;
-                        
-                        j00 += j0 * j0;
-                        j01 += j0 * j1;
-                        j02 += j0 * j2;
-                        j11 += j1 * j1;
-                        j12 += j1 * j2;
-                        j22 += j2 * j2;
-                        
-                        f0 += j0 * f;
-                        f1 += j1 * f;
-                        f2 += j2 * f;
-                    }
-                    if (validPoints === 0) break;
-                    
-                    const j10 = j01;
-                    const j20 = j02;
-                    const j21 = j12;
-                    
-                    const jDet = j00 * (j11 * j22 - j12 * j21)
-                               - j01 * (j10 * j22 - j12 * j20)
-                               + j02 * (j10 * j21 - j11 * j20);
-                               
-                    if (Math.abs(jDet) < 1e-10) break;
-                    
-                    const jInv00 =  (j11 * j22 - j12 * j21) / jDet;
-                    const jInv01 = -(j01 * j22 - j02 * j21) / jDet;
-                    const jInv02 =  (j01 * j12 - j02 * j11) / jDet;
-                    
-                    const jInv10 = -(j10 * j22 - j12 * j20) / jDet;
-                    const jInv11 =  (j00 * j22 - j02 * j20) / jDet;
-                    const jInv12 = -(j00 * j12 - j02 * j10) / jDet;
-                    
-                    const jInv20 =  (j10 * j21 - j11 * j20) / jDet;
-                    const jInv21 = -(j00 * j21 - j01 * j20) / jDet;
-                    const jInv22 =  (j00 * j11 - j01 * j10) / jDet;
-                    
-                    const dx_c = jInv00 * (-f0) + jInv01 * (-f1) + jInv02 * (-f2);
-                    const dy_c = jInv10 * (-f0) + jInv11 * (-f1) + jInv12 * (-f2);
-                    const dr   = jInv20 * (-f0) + jInv21 * (-f1) + jInv22 * (-f2);
-                    
-                    xc += dx_c;
-                    yc += dy_c;
-                    r += dr;
-                }
-            }
-            
-            if (r < 5000) {
-                if (showShape) {
-                    // Draw best-fit circle on overlay
-                    oCtx.beginPath();
-                    oCtx.arc(xc, yc, r, 0, Math.PI * 2);
-                    oCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-                    oCtx.lineWidth = Math.min(brushSize, Math.max(1, r));
-                    oCtx.stroke();
-                }
-
-                // Calculate intersecting percentage
-                let intersectingCount = 0;
+        let r = Math.sqrt(rSq);
+        
+        if (cluster.fitType === 'geometric') {
+            for (let iter = 0; iter < 10; iter++) {
+                let j00 = 0, j01 = 0, j02 = 0;
+                let j11 = 0, j12 = 0, j22 = 0;
+                let f0 = 0, f1 = 0, f2 = 0;
+                
+                let validPoints = 0;
                 for (let i = 0; i < points.length; i++) {
-                    const dx = points[i].x - xc;
-                    const dy = points[i].y - yc;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (Math.abs(dist - r) <= brushSize / 2.0) {
-                        intersectingCount++;
+                    const dx = xc - points[i].x;
+                    const dy = yc - points[i].y;
+                    const d = Math.sqrt(dx*dx + dy*dy);
+                    if (d === 0) continue;
+                    
+                    validPoints++;
+                    const j0 = dx / d;
+                    const j1 = dy / d;
+                    const j2 = -1;
+                    const f = d - r;
+                    
+                    j00 += j0 * j0; j01 += j0 * j1; j02 += j0 * j2;
+                    j11 += j1 * j1; j12 += j1 * j2; j22 += j2 * j2;
+                    f0 += j0 * f; f1 += j1 * f; f2 += j2 * f;
+                }
+                if (validPoints === 0) break;
+                
+                const j10 = j01, j20 = j02, j21 = j12;
+                const jDet = j00 * (j11 * j22 - j12 * j21) - j01 * (j10 * j22 - j12 * j20) + j02 * (j10 * j21 - j11 * j20);
+                           
+                if (Math.abs(jDet) < 1e-10) break;
+                
+                const jInv00 =  (j11 * j22 - j12 * j21) / jDet;
+                const jInv01 = -(j01 * j22 - j02 * j21) / jDet;
+                const jInv02 =  (j01 * j12 - j02 * j11) / jDet;
+                
+                const jInv10 = -(j10 * j22 - j12 * j20) / jDet;
+                const jInv11 =  (j00 * j22 - j02 * j20) / jDet;
+                const jInv12 = -(j00 * j12 - j02 * j10) / jDet;
+                
+                const jInv20 =  (j10 * j21 - j11 * j20) / jDet;
+                const jInv21 = -(j00 * j21 - j01 * j20) / jDet;
+                const jInv22 =  (j00 * j11 - j01 * j10) / jDet;
+                
+                xc += jInv00 * (-f0) + jInv01 * (-f1) + jInv02 * (-f2);
+                yc += jInv10 * (-f0) + jInv11 * (-f1) + jInv12 * (-f2);
+                r  += jInv20 * (-f0) + jInv21 * (-f1) + jInv22 * (-f2);
+            }
+        }
+        
+        if (r >= 5000) return null;
+
+        let intersectingCount = 0;
+        for (let i = 0; i < points.length; i++) {
+            const dx = points[i].x - xc;
+            const dy = points[i].y - yc;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (Math.abs(dist - r) <= brushSize / 2.0) {
+                intersectingCount++;
+            }
+        }
+
+        return { shape: 'circle', data: {xc, yc, r}, score: intersectingCount };
+    }
+
+    function updateShapeFit() {
+        oCtx.clearRect(0, 0, width, height);
+        
+        let totalIntersecting = 0;
+        let totalPoints = 0;
+
+        for (const cluster of clusters) {
+            const points = cluster.points;
+            if (points.length <= 3) continue;
+            
+            totalPoints += points.length;
+            
+            let triResult = null;
+            let circResult = null;
+            
+            if (cluster.shapeType === 'triangle' || cluster.shapeType === 'auto') {
+                triResult = getTriangleFitData(cluster);
+            }
+            if (cluster.shapeType === 'circle' || cluster.shapeType === 'auto') {
+                circResult = getCircleFitData(cluster);
+            }
+            
+            let bestResult = null;
+            if (cluster.shapeType === 'auto') {
+                if (triResult && circResult) {
+                    bestResult = triResult.score > circResult.score ? triResult : circResult;
+                } else if (triResult) {
+                    bestResult = triResult;
+                } else if (circResult) {
+                    bestResult = circResult;
+                }
+            } else if (cluster.shapeType === 'triangle') {
+                bestResult = triResult;
+            } else {
+                bestResult = circResult;
+            }
+            
+            if (bestResult) {
+                totalIntersecting += bestResult.score;
+                
+                if (showShape) {
+                    if (bestResult.shape === 'triangle') {
+                        const triangle = bestResult.data;
+                        oCtx.beginPath();
+                        oCtx.moveTo(triangle[0].x, triangle[0].y);
+                        oCtx.lineTo(triangle[1].x, triangle[1].y);
+                        oCtx.lineTo(triangle[2].x, triangle[2].y);
+                        oCtx.closePath();
+                        oCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                        oCtx.lineWidth = brushSize;
+                        oCtx.lineJoin = 'round';
+                        oCtx.stroke();
+                    } else if (bestResult.shape === 'circle') {
+                        const {xc, yc, r} = bestResult.data;
+                        oCtx.beginPath();
+                        oCtx.arc(xc, yc, r, 0, Math.PI * 2);
+                        oCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                        oCtx.lineWidth = Math.min(brushSize, Math.max(1, r));
+                        oCtx.stroke();
                     }
                 }
-                const percent = (intersectingCount / points.length) * 100;
-                percentDisplay.textContent = percent.toFixed(1) + '%';
-            } else {
-                percentDisplay.textContent = '0.0%';
             }
+        }
+        
+        if (totalPoints > 0) {
+            const percent = (totalIntersecting / totalPoints) * 100;
+            percentDisplay.textContent = percent.toFixed(1) + '%';
         } else {
             percentDisplay.textContent = '0.0%';
         }
