@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circle Fit AI Drawing App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="app-container">
+        <header class="toolbar">
+            <div class="tools-left">
+                <button id="btn-pen" class="tool-btn active">Pen</button>
+                <button id="btn-eraser" class="tool-btn">Eraser</button>
+                <button id="btn-clear" class="tool-btn danger">Clear</button>
+            </div>
+            <div class="stats-right">
+                <span class="stat-label">Intersecting:</span>
+                <span id="percent-display" class="stat-value">0.0%</span>
+            </div>
+        </header>
+        
+        <div class="canvas-container">
+            <!-- Two canvases: one for the user's drawing, one for the overlay (circle) -->
+            <canvas id="drawing-canvas" width="800" height="550"></canvas>
+            <canvas id="overlay-canvas" width="800" height="550"></canvas>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
