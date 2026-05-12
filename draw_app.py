@@ -228,10 +228,33 @@ def main():
     brush_size = 5
     eraser_size = 20
     
-    fit_overlay = None
+    clusters = []
+    current_cluster = None
     percent = 0.0
     canvas_changed = False
     
+    def add_interpolated(p1, p2, cluster_points):
+        dist = np.hypot(p2[0] - p1[0], p2[1] - p1[1])
+        steps = max(1, int(np.ceil(dist)))
+        for i in range(1, steps + 1):
+            cluster_points.append([p1[0] + (p2[0] - p1[0]) * i / steps, p1[1] + (p2[1] - p1[1]) * i / steps])
+
+    def erase_interpolated(p1, p2):
+        dist = np.hypot(p2[0] - p1[0], p2[1] - p1[1])
+        steps = max(1, int(np.ceil(dist / (eraser_size / 4))))
+        for i in range(steps + 1):
+            ex = p1[0] + (p2[0] - p1[0]) * i / steps if steps > 0 else p1[0]
+            ey = p1[1] + (p2[1] - p1[1]) * i / steps if steps > 0 else p1[1]
+            erase_pos(np.array([ex, ey]))
+
+    def erase_pos(pos):
+        radius_sq = (eraser_size / 2) ** 2
+        for cluster in clusters:
+            if not cluster['points']: continue
+            pts = np.array(cluster['points'])
+            dist_sq = (pts[:, 0] - pos[0])**2 + (pts[:, 1] - pos[1])**2
+            cluster['points'] = pts[dist_sq > radius_sq].tolist()
+
     running = True
     while running:
         for event in pygame.event.get():
@@ -246,11 +269,15 @@ def main():
                             if button.rect.collidepoint(event.pos):
                                 if button.action_mode == "clear":
                                     canvas.fill(WHITE)
+                                    clusters.clear()
                                     canvas_changed = True
                                 elif button.action_mode == "shape_toggle":
                                     if fit_shape == "circle":
                                         fit_shape = "triangle"
                                         button.text = "Shape: Tri"
+                                    elif fit_shape == "triangle":
+                                        fit_shape = "auto"
+                                        button.text = "Shape: Auto"
                                     else:
                                         fit_shape = "circle"
                                         button.text = "Shape: Circle"
@@ -270,6 +297,13 @@ def main():
                         drawing = True
                         last_pos = (event.pos[0], event.pos[1] - PANEL_HEIGHT)
                         
+                        if mode == "pen":
+                            current_cluster = {'points': [], 'shape_type': fit_shape, 'fit_mode': fit_mode}
+                            clusters.append(current_cluster)
+                            current_cluster['points'].append([last_pos[0], last_pos[1]])
+                        else:
+                            erase_pos(np.array(last_pos))
+                        
                         # Draw a single point in case the user just clicks without moving
                         current_pos = last_pos
                         color = BLACK if mode == "pen" else WHITE
@@ -280,6 +314,7 @@ def main():
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:
                     drawing = False
+                    current_cluster = None
                     last_pos = None
                     
             elif event.type == pygame.MOUSEMOTION:
@@ -289,6 +324,11 @@ def main():
                     size = brush_size if mode == "pen" else eraser_size
                     
                     if last_pos is not None:
+                        if mode == "pen" and current_cluster is not None:
+                            add_interpolated(last_pos, current_pos, current_cluster['points'])
+                        elif mode == "eraser":
+                            erase_interpolated(last_pos, current_pos)
+                            
                         # Draw line between previous position and current position for smooth drawing
                         pygame.draw.line(canvas, color, last_pos, current_pos, size)
                         # Draw circle at ends to make line round and smooth
@@ -296,51 +336,64 @@ def main():
                     last_pos = current_pos
                     canvas_changed = True
 
-        if canvas_changed:
-            # We must lock array for short time, delete to unlock so we can blit
-            arr = pygame.surfarray.pixels3d(canvas)
-            points = np.argwhere(np.all(arr == BLACK, axis=-1))
-            del arr  # unlock the surface
-            
-            if len(points) > 3:
-                try:
-                    if fit_shape == "triangle":
-                        triangle = fit_triangle(points)
-                        if triangle is not None:
-                            fit_overlay = ("triangle", triangle.astype(int))
-                            percent = score_triangle(points, triangle, brush_size)
-                        else:
-                            fit_overlay = None
-                            percent = 0.0
-                    else:
-                        circle, percent = fit_circle_to_points(points, fit_mode, brush_size)
-                        fit_overlay = ("circle", circle) if circle is not None else None
-                except np.linalg.LinAlgError:
-                    fit_overlay = None
-                    percent = 0.0
-            else:
-                fit_overlay = None
-                percent = 0.0
-                
-            canvas_changed = False
-
         # Draw background for the top panel
         screen.fill(GRAY) 
         
         # Draw canvas
         screen.blit(canvas, (0, PANEL_HEIGHT))
         
-        # Overlay the fitted shape
-        if fit_overlay is not None:
-            overlay_type, overlay_shape = fit_overlay
-            if overlay_type == "circle":
-                xc, yc, R = overlay_shape
+        total_intersecting = 0
+        total_points = 0
+        
+        for cluster in clusters:
+            if len(cluster['points']) <= 3:
+                continue
+                
+            pts = np.array(cluster['points'])
+            total_points += len(pts)
+            
+            tri_score = -1
+            tri_shape = None
+            if cluster['shape_type'] in ["triangle", "auto"]:
+                triangle = fit_triangle(pts)
+                if triangle is not None:
+                    tri_shape = triangle
+                    tri_score = int(score_triangle(pts, triangle, brush_size) / 100 * len(pts))
+            
+            circ_score = -1
+            circ_shape = None
+            if cluster['shape_type'] in ["circle", "auto"]:
+                circle, _ = fit_circle_to_points(pts, cluster['fit_mode'], brush_size)
+                if circle is not None:
+                    xc, yc, R = circle
+                    dist = np.sqrt((pts[:, 0] - xc)**2 + (pts[:, 1] - yc)**2)
+                    circ_score = np.sum(np.abs(dist - R) <= brush_size / 2.0)
+                    circ_shape = circle
+            
+            best_type = None
+            if cluster['shape_type'] == "auto":
+                if tri_score >= circ_score and tri_shape is not None:
+                    best_type = "triangle"
+                elif circ_shape is not None:
+                    best_type = "circle"
+            else:
+                best_type = cluster['shape_type']
+
+            if best_type == "triangle" and tri_shape is not None:
+                tri_render = [(int(x), int(y + PANEL_HEIGHT)) for x, y in tri_shape]
+                pygame.draw.polygon(screen, RED, tri_render, brush_size)
+                total_intersecting += tri_score
+            elif best_type == "circle" and circ_shape is not None:
+                xc, yc, R = circ_shape
                 thickness = min(brush_size, max(1, R))
                 pygame.draw.circle(screen, RED, (xc, yc + PANEL_HEIGHT), R, thickness)
-            else:
-                triangle = [(int(x), int(y + PANEL_HEIGHT)) for x, y in overlay_shape]
-                pygame.draw.polygon(screen, RED, triangle, brush_size)
-            
+                total_intersecting += circ_score
+                    
+        if total_points > 0:
+            percent = (total_intersecting / total_points) * 100
+        else:
+            percent = 0.0
+
         # Draw buttons
         for button in buttons:
             button.draw(screen, mode)
