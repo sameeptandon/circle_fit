@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnEraser = document.getElementById('btn-eraser');
     const btnClear = document.getElementById('btn-clear');
     const btnToggleCircle = document.getElementById('btn-toggle-circle');
+    const btnFitType = document.getElementById('btn-fit-type');
     const percentDisplay = document.getElementById('percent-display');
 
     const width = drawingCanvas.width;
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDrawing = false;
     let mode = 'pen'; // 'pen' or 'eraser'
     let showCircle = true;
+    let fitType = 'algebraic';
     const brushSize = 5;
     const eraserSize = 20;
 
@@ -50,6 +52,19 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             btnToggleCircle.textContent = 'Show Circle';
             btnToggleCircle.classList.remove('active');
+        }
+        updateCircleFit();
+    });
+
+    btnFitType.addEventListener('click', () => {
+        if (fitType === 'algebraic') {
+            fitType = 'geometric';
+            btnFitType.textContent = 'Fit: Geometric';
+            btnFitType.classList.add('active');
+        } else {
+            fitType = 'algebraic';
+            btnFitType.textContent = 'Fit: Algebraic';
+            btnFitType.classList.remove('active');
         }
         updateCircleFit();
     });
@@ -203,14 +218,78 @@ document.addEventListener('DOMContentLoaded', () => {
         const inv22 =  (m00 * m11 - m01 * m10) / det;
 
         // Compute c = M^-1 * V
-        const xc = inv00 * v0 + inv01 * v1 + inv02 * v2;
-        const yc = inv10 * v0 + inv11 * v1 + inv12 * v2;
-        const w  = inv20 * v0 + inv21 * v1 + inv22 * v2;
+        let xc = inv00 * v0 + inv01 * v1 + inv02 * v2;
+        let yc = inv10 * v0 + inv11 * v1 + inv12 * v2;
+        let w  = inv20 * v0 + inv21 * v1 + inv22 * v2;
 
-        const rSq = w + xc * xc + yc * yc;
+        let rSq = w + xc * xc + yc * yc;
 
         if (rSq > 0) {
-            const r = Math.sqrt(rSq);
+            let r = Math.sqrt(rSq);
+            
+            if (fitType === 'geometric') {
+                for (let iter = 0; iter < 10; iter++) {
+                    let j00 = 0, j01 = 0, j02 = 0;
+                    let j11 = 0, j12 = 0, j22 = 0;
+                    let f0 = 0, f1 = 0, f2 = 0;
+                    
+                    let validPoints = 0;
+                    for (let i = 0; i < points.length; i++) {
+                        const dx = xc - points[i].x;
+                        const dy = yc - points[i].y;
+                        const d = Math.sqrt(dx*dx + dy*dy);
+                        if (d === 0) continue;
+                        
+                        validPoints++;
+                        const j0 = dx / d;
+                        const j1 = dy / d;
+                        const j2 = -1;
+                        const f = d - r;
+                        
+                        j00 += j0 * j0;
+                        j01 += j0 * j1;
+                        j02 += j0 * j2;
+                        j11 += j1 * j1;
+                        j12 += j1 * j2;
+                        j22 += j2 * j2;
+                        
+                        f0 += j0 * f;
+                        f1 += j1 * f;
+                        f2 += j2 * f;
+                    }
+                    if (validPoints === 0) break;
+                    
+                    const j10 = j01;
+                    const j20 = j02;
+                    const j21 = j12;
+                    
+                    const jDet = j00 * (j11 * j22 - j12 * j21)
+                               - j01 * (j10 * j22 - j12 * j20)
+                               + j02 * (j10 * j21 - j11 * j20);
+                               
+                    if (Math.abs(jDet) < 1e-10) break;
+                    
+                    const jInv00 =  (j11 * j22 - j12 * j21) / jDet;
+                    const jInv01 = -(j01 * j22 - j02 * j21) / jDet;
+                    const jInv02 =  (j01 * j12 - j02 * j11) / jDet;
+                    
+                    const jInv10 = -(j10 * j22 - j12 * j20) / jDet;
+                    const jInv11 =  (j00 * j22 - j02 * j20) / jDet;
+                    const jInv12 = -(j00 * j12 - j02 * j10) / jDet;
+                    
+                    const jInv20 =  (j10 * j21 - j11 * j20) / jDet;
+                    const jInv21 = -(j00 * j21 - j01 * j20) / jDet;
+                    const jInv22 =  (j00 * j11 - j01 * j10) / jDet;
+                    
+                    const dx_c = jInv00 * (-f0) + jInv01 * (-f1) + jInv02 * (-f2);
+                    const dy_c = jInv10 * (-f0) + jInv11 * (-f1) + jInv12 * (-f2);
+                    const dr   = jInv20 * (-f0) + jInv21 * (-f1) + jInv22 * (-f2);
+                    
+                    xc += dx_c;
+                    yc += dy_c;
+                    r += dr;
+                }
+            }
             
             if (r < 5000) {
                 if (showCircle) {
