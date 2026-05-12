@@ -1,6 +1,6 @@
-# Circle Fit AI Drawing App
+# Shape Fit AI Drawing App
 
-An interactive drawing application that uses real-time least-squares geometry to dynamically fit the optimal circle to your freehand strokes.
+An interactive drawing application that uses real-time geometry to dynamically fit the selected shape to your freehand strokes.
 
 The application exists in two formats: a **Web Version** (Vanilla HTML/CSS/JS) and a **Desktop Version** (Python/Pygame).
 
@@ -8,16 +8,17 @@ The application exists in two formats: a **Web Version** (Vanilla HTML/CSS/JS) a
 
 ## Features
 
-- **Real-Time Fitting:** As you draw, the application continuously calculates and overlays the mathematically optimal circle for your strokes.
-- **Intersection Percentage:** Dynamically displays what percentage of your drawn pixels cleanly intersect with the calculated best-fit circle.
+- **Real-Time Fitting:** As you draw, the application continuously calculates and overlays the selected best-fit shape for your strokes.
+- **Circle and Triangle Modes:** Fit either a least-squares circle or an equilateral triangle to your drawing.
+- **Intersection Percentage:** Dynamically displays what percentage of your drawn pixels cleanly intersect with the calculated best-fit shape.
 - **Mobile Responsive:** The web application natively supports touch events and scales gracefully on iOS and Android devices.
-- **Toggle View:** Hide or show the best-fit circle while you draw to test your raw accuracy.
+- **Toggle View:** Hide or show the best-fit shape while you draw to test your raw accuracy.
 
 ---
 
 ## 1. Web Version (Recommended)
 
-The web version is a high-performance, dependency-free port of the application. It uses pure JavaScript to solve the $3 \times 3$ matrix inversion equations natively in the browser without any heavy math libraries.
+The web version is a high-performance, dependency-free port of the application. It uses pure JavaScript to solve the circle equations and triangle geometry natively in the browser without any heavy math libraries.
 
 ### How to Run Locally
 Because the web app uses vanilla HTML, CSS, and JS, you can run it using any simple local server.
@@ -47,4 +48,3 @@ The original desktop application uses Python, `pygame` for the GUI, and `numpy` 
    ```bash
    python draw_app.py
    ```
-
