@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnPen = document.getElementById('btn-pen');
     const btnEraser = document.getElementById('btn-eraser');
     const btnClear = document.getElementById('btn-clear');
+    const btnToggleCircle = document.getElementById('btn-toggle-circle');
     const percentDisplay = document.getElementById('percent-display');
 
     const width = drawingCanvas.width;
@@ -18,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let isDrawing = false;
     let mode = 'pen'; // 'pen' or 'eraser'
+    let showCircle = true;
     const brushSize = 5;
     const eraserSize = 20;
 
@@ -37,6 +39,18 @@ document.addEventListener('DOMContentLoaded', () => {
     btnClear.addEventListener('click', () => {
         dCtx.fillStyle = '#ffffff';
         dCtx.fillRect(0, 0, width, height);
+        updateCircleFit();
+    });
+
+    btnToggleCircle.addEventListener('click', () => {
+        showCircle = !showCircle;
+        if (showCircle) {
+            btnToggleCircle.textContent = 'Hide Circle';
+            btnToggleCircle.classList.add('active');
+        } else {
+            btnToggleCircle.textContent = 'Show Circle';
+            btnToggleCircle.classList.remove('active');
+        }
         updateCircleFit();
     });
 
@@ -194,12 +208,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const r = Math.sqrt(rSq);
             
             if (r < 5000) {
-                // Draw best-fit circle on overlay
-                oCtx.beginPath();
-                oCtx.arc(xc, yc, r, 0, Math.PI * 2);
-                oCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-                oCtx.lineWidth = Math.min(brushSize, Math.max(1, r));
-                oCtx.stroke();
+                if (showCircle) {
+                    // Draw best-fit circle on overlay
+                    oCtx.beginPath();
+                    oCtx.arc(xc, yc, r, 0, Math.PI * 2);
+                    oCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                    oCtx.lineWidth = Math.min(brushSize, Math.max(1, r));
+                    oCtx.stroke();
+                }
 
                 // Calculate intersecting percentage
                 let intersectingCount = 0;
