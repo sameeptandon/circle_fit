@@ -82,6 +82,12 @@ body {
     background-color: var(--accent-hover);
 }
 
+.tool-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
 .tool-btn.danger {
     color: var(--danger);
     border-color: #feb2b2;
