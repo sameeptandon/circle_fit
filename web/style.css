@@ -120,6 +120,7 @@ body {
     height: 550px;
     background-color: #ffffff;
     cursor: crosshair;
+    touch-action: none;
 }
 
 /* Ensure absolute positioning for overlay canvas */
