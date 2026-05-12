@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Circle Fit AI Drawing App</title>
+    <title>Shape Fit AI Drawing App</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -16,9 +16,10 @@
                 <button id="btn-pen" class="tool-btn active">Pen</button>
                 <button id="btn-eraser" class="tool-btn">Eraser</button>
                 <button id="btn-clear" class="tool-btn danger">Clear</button>
-                <button id="btn-toggle-circle" class="tool-btn active">Hide Circle</button>
+                <button id="btn-shape-type" class="tool-btn active">Shape: Circle</button>
+                <button id="btn-toggle-shape" class="tool-btn active">Hide Shape</button>
                 <button id="btn-fit-type" class="tool-btn active">Fit: Geometric</button>
-                <span class="version-badge">v1.5</span>
+                <span class="version-badge">v1.6</span>
             </div>
             <div class="stats-right">
                 <span class="stat-label">Intersecting:</span>
@@ -27,12 +28,12 @@
         </header>
         
         <div class="canvas-container">
-            <!-- Two canvases: one for the user's drawing, one for the overlay (circle) -->
+            <!-- Two canvases: one for the user's drawing, one for the fitted shape overlay -->
             <canvas id="drawing-canvas" width="800" height="550"></canvas>
             <canvas id="overlay-canvas" width="800" height="550"></canvas>
         </div>
     </main>
 
-    <script src="app.js?v=1.5"></script>
+    <script src="app.js?v=1.6"></script>
 </body>
 </html>
