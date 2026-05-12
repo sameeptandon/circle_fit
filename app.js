@@ -320,4 +320,38 @@ document.addEventListener('DOMContentLoaded', () => {
             percentDisplay.textContent = '0.0%';
         }
     }
+
+    // Dynamic Version Badge
+    async function updateVersionBadge() {
+        try {
+            const response = await fetch('https://api.github.com/repos/sameeptandon/circle_fit/commits/main');
+            if (response.ok) {
+                const data = await response.json();
+                const sha = data.sha.slice(-5);
+                const date = new Date(data.commit.author.date);
+                
+                const mm = String(date.getMonth() + 1).padStart(2, '0');
+                const dd = String(date.getDate()).padStart(2, '0');
+                const yy = String(date.getFullYear()).slice(-2);
+                
+                let hours = date.getHours();
+                const ampm = hours >= 12 ? 'pm' : 'am';
+                hours = hours % 12;
+                hours = hours ? hours : 12; // the hour '0' should be '12'
+                const hh = String(hours).padStart(2, '0');
+                const min = String(date.getMinutes()).padStart(2, '0');
+                
+                const dateStr = `${mm}/${dd}/${yy} ${hh}:${min} ${ampm}`;
+                const badge = document.querySelector('.version-badge');
+                if (badge) {
+                    badge.textContent = `v-${sha} (${dateStr})`;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch commit info for version badge', e);
+        }
+    }
+    
+    // Call on load
+    updateVersionBadge();
 });
