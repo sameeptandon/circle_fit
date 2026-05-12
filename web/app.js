@@ -7,7 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnPen = document.getElementById('btn-pen');
     const btnEraser = document.getElementById('btn-eraser');
     const btnClear = document.getElementById('btn-clear');
-    const btnToggleCircle = document.getElementById('btn-toggle-circle');
+    const btnShapeType = document.getElementById('btn-shape-type');
+    const btnToggleShape = document.getElementById('btn-toggle-shape');
     const btnFitType = document.getElementById('btn-fit-type');
     const percentDisplay = document.getElementById('percent-display');
 
@@ -20,7 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let isDrawing = false;
     let mode = 'pen'; // 'pen' or 'eraser'
-    let showCircle = true;
+    let shapeType = 'circle';
+    let showShape = true;
     let fitType = 'geometric';
     const brushSize = 5;
     const eraserSize = 20;
@@ -41,19 +43,32 @@ document.addEventListener('DOMContentLoaded', () => {
     btnClear.addEventListener('click', () => {
         dCtx.fillStyle = '#ffffff';
         dCtx.fillRect(0, 0, width, height);
-        updateCircleFit();
+        updateShapeFit();
     });
 
-    btnToggleCircle.addEventListener('click', () => {
-        showCircle = !showCircle;
-        if (showCircle) {
-            btnToggleCircle.textContent = 'Hide Circle';
-            btnToggleCircle.classList.add('active');
+    btnShapeType.addEventListener('click', () => {
+        if (shapeType === 'circle') {
+            shapeType = 'triangle';
+            btnShapeType.textContent = 'Shape: Triangle';
+            btnFitType.disabled = true;
         } else {
-            btnToggleCircle.textContent = 'Show Circle';
-            btnToggleCircle.classList.remove('active');
+            shapeType = 'circle';
+            btnShapeType.textContent = 'Shape: Circle';
+            btnFitType.disabled = false;
         }
-        updateCircleFit();
+        updateShapeFit();
+    });
+
+    btnToggleShape.addEventListener('click', () => {
+        showShape = !showShape;
+        if (showShape) {
+            btnToggleShape.textContent = 'Hide Shape';
+            btnToggleShape.classList.add('active');
+        } else {
+            btnToggleShape.textContent = 'Show Shape';
+            btnToggleShape.classList.remove('active');
+        }
+        updateShapeFit();
     });
 
     btnFitType.addEventListener('click', () => {
@@ -66,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnFitType.textContent = 'Fit: Algebraic';
             btnFitType.classList.remove('active');
         }
-        updateCircleFit();
+        updateShapeFit();
     });
 
     // Drawing Logic
@@ -106,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         dCtx.beginPath();
         dCtx.moveTo(pos.x, pos.y);
-        updateCircleFit();
+        updateShapeFit();
     }
 
     function draw(e) {
@@ -117,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dCtx.lineWidth = mode === 'pen' ? brushSize : eraserSize;
         dCtx.lineTo(pos.x, pos.y);
         dCtx.stroke();
-        updateCircleFit();
+        updateShapeFit();
     }
 
     function stopDrawing() {
@@ -136,18 +151,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('touchend', stopDrawing);
     window.addEventListener('touchcancel', stopDrawing);
 
-    // Circle fitting logic
-    function updateCircleFit() {
-        // Clear overlay
-        oCtx.clearRect(0, 0, width, height);
-        
+    function getDrawnPoints() {
         const imgData = dCtx.getImageData(0, 0, width, height);
         const data = imgData.data;
-        
         const points = [];
-        
-        // Find black pixels (R=0, G=0, B=0)
-        // Since we anti-alias, we can just look for very dark pixels (e.g., R < 50)
+
+        // Canvas anti-aliasing creates dark gray edges, so use a tolerance.
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const i = (y * width + x) * 4;
@@ -157,8 +166,220 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        return points;
+    }
+
+    function distanceToSegment(p, a, b) {
+        const vx = b.x - a.x;
+        const vy = b.y - a.y;
+        const wx = p.x - a.x;
+        const wy = p.y - a.y;
+        const lenSq = vx * vx + vy * vy;
+
+        if (lenSq === 0) {
+            const dx = p.x - a.x;
+            const dy = p.y - a.y;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        const t = Math.max(0, Math.min(1, (wx * vx + wy * vy) / lenSq));
+        const projX = a.x + t * vx;
+        const projY = a.y + t * vy;
+        const dx = p.x - projX;
+        const dy = p.y - projY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function samplePoints(points, maxPoints = 1200) {
+        if (points.length <= maxPoints) return points;
+
+        const step = Math.ceil(points.length / maxPoints);
+        const sampled = [];
+        for (let i = 0; i < points.length; i += step) {
+            sampled.push(points[i]);
+        }
+        return sampled;
+    }
+
+    function equilateralVertices(params) {
+        const [cx, cy, radius, theta] = params;
+        const safeRadius = Math.max(1, radius);
+        const vertices = [];
+
+        for (let i = 0; i < 3; i++) {
+            const angle = theta + i * (Math.PI * 2 / 3);
+            vertices.push({
+                x: cx + safeRadius * Math.cos(angle),
+                y: cy + safeRadius * Math.sin(angle)
+            });
+        }
+
+        return vertices;
+    }
+
+    function equilateralLoss(params, points) {
+        const triangle = equilateralVertices(params);
+        let total = 0;
+
+        for (const point of points) {
+            let minDistance = Infinity;
+            for (let i = 0; i < 3; i++) {
+                minDistance = Math.min(minDistance, distanceToSegment(point, triangle[i], triangle[(i + 1) % 3]));
+            }
+            total += minDistance * minDistance;
+        }
+
+        return total / points.length;
+    }
+
+    function initialEquilateralParams(points) {
+        let cx = 0;
+        let cy = 0;
+        for (const point of points) {
+            cx += point.x;
+            cy += point.y;
+        }
+        cx /= points.length;
+        cy /= points.length;
+
+        let radius = 1;
+        for (const point of points) {
+            const dx = point.x - cx;
+            const dy = point.y - cy;
+            radius = Math.max(radius, Math.sqrt(dx * dx + dy * dy));
+        }
+
+        let bestParams = [cx, cy, radius, 0];
+        let bestLoss = Infinity;
+        for (let i = 0; i < 24; i++) {
+            const theta = i * Math.PI / 36;
+            const candidate = [cx, cy, radius, theta];
+            const loss = equilateralLoss(candidate, points);
+            if (loss < bestLoss) {
+                bestLoss = loss;
+                bestParams = candidate;
+            }
+        }
+
+        return bestParams;
+    }
+
+    function fitEquilateralTriangle(points) {
+        const fitPoints = samplePoints(points);
+        if (fitPoints.length < 4) return null;
+
+        const start = initialEquilateralParams(fitPoints);
+        const simplex = [
+            start,
+            [start[0] + 12, start[1], start[2], start[3]],
+            [start[0], start[1] + 12, start[2], start[3]],
+            [start[0], start[1], start[2] * 1.08 + 1, start[3]],
+            [start[0], start[1], start[2], start[3] + Math.PI / 36]
+        ];
+        const values = simplex.map(params => equilateralLoss(params, fitPoints));
+
+        for (let iter = 0; iter < 45; iter++) {
+            const order = values.map((value, index) => ({value, index})).sort((a, b) => a.value - b.value);
+            const orderedSimplex = order.map(item => simplex[item.index]);
+            const orderedValues = order.map(item => values[item.index]);
+
+            for (let i = 0; i < simplex.length; i++) {
+                simplex[i] = orderedSimplex[i];
+                values[i] = orderedValues[i];
+            }
+
+            const centroid = [0, 0, 0, 0];
+            for (let i = 0; i < 4; i++) {
+                for (let j = 0; j < 4; j++) {
+                    centroid[j] += simplex[i][j] / 4;
+                }
+            }
+
+            const worst = simplex[4];
+            const reflect = centroid.map((value, i) => value + (value - worst[i]));
+            reflect[2] = Math.max(1, reflect[2]);
+            const reflectValue = equilateralLoss(reflect, fitPoints);
+
+            if (reflectValue < values[0]) {
+                const expand = centroid.map((value, i) => value + 2 * (reflect[i] - value));
+                expand[2] = Math.max(1, expand[2]);
+                const expandValue = equilateralLoss(expand, fitPoints);
+                simplex[4] = expandValue < reflectValue ? expand : reflect;
+                values[4] = Math.min(expandValue, reflectValue);
+            } else if (reflectValue < values[3]) {
+                simplex[4] = reflect;
+                values[4] = reflectValue;
+            } else {
+                const contract = centroid.map((value, i) => value + 0.5 * (worst[i] - value));
+                contract[2] = Math.max(1, contract[2]);
+                const contractValue = equilateralLoss(contract, fitPoints);
+
+                if (contractValue < values[4]) {
+                    simplex[4] = contract;
+                    values[4] = contractValue;
+                } else {
+                    for (let i = 1; i < simplex.length; i++) {
+                        simplex[i] = simplex[0].map((value, j) => value + 0.5 * (simplex[i][j] - value));
+                        simplex[i][2] = Math.max(1, simplex[i][2]);
+                        values[i] = equilateralLoss(simplex[i], fitPoints);
+                    }
+                }
+            }
+        }
+
+        let bestIndex = 0;
+        for (let i = 1; i < values.length; i++) {
+            if (values[i] < values[bestIndex]) bestIndex = i;
+        }
+
+        return equilateralVertices(simplex[bestIndex]);
+    }
+
+    function drawTriangleFit(points) {
+        const triangle = fitEquilateralTriangle(points);
+        if (!triangle) {
+            percentDisplay.textContent = '0.0%';
+            return;
+        }
+
+        if (showShape) {
+            oCtx.beginPath();
+            oCtx.moveTo(triangle[0].x, triangle[0].y);
+            oCtx.lineTo(triangle[1].x, triangle[1].y);
+            oCtx.lineTo(triangle[2].x, triangle[2].y);
+            oCtx.closePath();
+            oCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            oCtx.lineWidth = brushSize;
+            oCtx.lineJoin = 'round';
+            oCtx.stroke();
+        }
+
+        let intersectingCount = 0;
+        for (const point of points) {
+            let minDistance = Infinity;
+            for (let i = 0; i < 3; i++) {
+                minDistance = Math.min(minDistance, distanceToSegment(point, triangle[i], triangle[(i + 1) % 3]));
+            }
+            if (minDistance <= brushSize / 2.0) {
+                intersectingCount++;
+            }
+        }
+
+        const percent = (intersectingCount / points.length) * 100;
+        percentDisplay.textContent = percent.toFixed(1) + '%';
+    }
+
+    function updateShapeFit() {
+        oCtx.clearRect(0, 0, width, height);
+        const points = getDrawnPoints();
+
         if (points.length <= 3) {
             percentDisplay.textContent = '0.0%';
+            return;
+        }
+
+        if (shapeType === 'triangle') {
+            drawTriangleFit(points);
             return;
         }
 
@@ -292,7 +513,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (r < 5000) {
-                if (showCircle) {
+                if (showShape) {
                     // Draw best-fit circle on overlay
                     oCtx.beginPath();
                     oCtx.arc(xc, yc, r, 0, Math.PI * 2);
