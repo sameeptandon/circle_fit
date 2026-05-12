@@ -43,13 +43,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Drawing Logic
     function getMousePos(e) {
         const rect = drawingCanvas.getBoundingClientRect();
+        let clientX = e.clientX;
+        let clientY = e.clientY;
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        }
         return {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
+            x: clientX - rect.left,
+            y: clientY - rect.top
         };
     }
 
-    drawingCanvas.addEventListener('mousedown', (e) => {
+    function startDrawing(e) {
+        if (e.cancelable) e.preventDefault(); // prevent scrolling
         isDrawing = true;
         const pos = getMousePos(e);
         dCtx.beginPath();
@@ -66,23 +73,34 @@ document.addEventListener('DOMContentLoaded', () => {
         dCtx.beginPath();
         dCtx.moveTo(pos.x, pos.y);
         updateCircleFit();
-    });
+    }
 
-    drawingCanvas.addEventListener('mousemove', (e) => {
+    function draw(e) {
         if (!isDrawing) return;
+        if (e.cancelable) e.preventDefault(); // prevent scrolling
         const pos = getMousePos(e);
         dCtx.strokeStyle = mode === 'pen' ? '#000000' : '#ffffff';
         dCtx.lineWidth = mode === 'pen' ? brushSize : eraserSize;
         dCtx.lineTo(pos.x, pos.y);
         dCtx.stroke();
         updateCircleFit();
-    });
+    }
 
-    window.addEventListener('mouseup', () => {
+    function stopDrawing() {
         if (isDrawing) {
             isDrawing = false;
         }
-    });
+    }
+
+    drawingCanvas.addEventListener('mousedown', startDrawing);
+    drawingCanvas.addEventListener('touchstart', startDrawing, {passive: false});
+
+    drawingCanvas.addEventListener('mousemove', draw);
+    drawingCanvas.addEventListener('touchmove', draw, {passive: false});
+
+    window.addEventListener('mouseup', stopDrawing);
+    window.addEventListener('touchend', stopDrawing);
+    window.addEventListener('touchcancel', stopDrawing);
 
     // Circle fitting logic
     function updateCircleFit() {
