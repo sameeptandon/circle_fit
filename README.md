@@ -48,9 +48,3 @@ The original desktop application uses Python, `pygame` for the GUI, and `numpy` 
    python draw_app.py
    ```
 
-## The Math Behind It
-
-The application mathematically determines the center coordinates $(x_c, y_c)$ and radius $R$ of the best-fit circle by solving the least-squares problem:
-$$ (x - x_c)^2 + (y - y_c)^2 = R^2 $$
-
-This is expanded into a linear system $Ac = b$, and the $3 \times 3$ matrix is inverted in real time to guarantee a sub-millisecond response delay even with thousands of pixels drawn.
