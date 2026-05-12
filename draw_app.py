@@ -51,11 +51,11 @@ def main():
         Button(10, 10, 100, 30, "Pen", "pen"),
         Button(120, 10, 100, 30, "Eraser", "eraser"),
         Button(230, 10, 100, 30, "Clear", "clear"),
-        Button(340, 10, 130, 30, "Fit: Alg", "fit_toggle")
+        Button(340, 10, 130, 30, "Fit: Geo", "fit_toggle")
     ]
     
     mode = "pen"
-    fit_mode = "algebraic"
+    fit_mode = "geometric"
     drawing = False
     last_pos = None
     brush_size = 5
