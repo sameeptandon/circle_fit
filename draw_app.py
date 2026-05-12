@@ -50,10 +50,12 @@ def main():
     buttons = [
         Button(10, 10, 100, 30, "Pen", "pen"),
         Button(120, 10, 100, 30, "Eraser", "eraser"),
-        Button(230, 10, 100, 30, "Clear", "clear")
+        Button(230, 10, 100, 30, "Clear", "clear"),
+        Button(340, 10, 130, 30, "Fit: Alg", "fit_toggle")
     ]
     
     mode = "pen"
+    fit_mode = "algebraic"
     drawing = False
     last_pos = None
     brush_size = 5
@@ -77,6 +79,14 @@ def main():
                             if button.rect.collidepoint(event.pos):
                                 if button.action_mode == "clear":
                                     canvas.fill(WHITE)
+                                    canvas_changed = True
+                                elif button.action_mode == "fit_toggle":
+                                    if fit_mode == "algebraic":
+                                        fit_mode = "geometric"
+                                        button.text = "Fit: Geo"
+                                    else:
+                                        fit_mode = "algebraic"
+                                        button.text = "Fit: Alg"
                                     canvas_changed = True
                                 else:
                                     mode = button.action_mode
@@ -130,6 +140,33 @@ def main():
                     
                     if R_sq > 0:
                         R = np.sqrt(R_sq)
+                        
+                        if fit_mode == "geometric":
+                            # Gauss-Newton optimization
+                            for _ in range(10):
+                                dx = xc - x
+                                dy = yc - y
+                                d = np.sqrt(dx**2 + dy**2)
+                                
+                                valid = d > 0
+                                if not np.any(valid):
+                                    break
+                                    
+                                v_dx = dx[valid]
+                                v_dy = dy[valid]
+                                v_d = d[valid]
+                                
+                                J = np.column_stack([v_dx/v_d, v_dy/v_d, -np.ones_like(v_d)])
+                                f = v_d - R
+                                
+                                try:
+                                    delta, _, _, _ = np.linalg.lstsq(J, -f, rcond=None)
+                                    xc += delta[0]
+                                    yc += delta[1]
+                                    R += delta[2]
+                                except np.linalg.LinAlgError:
+                                    break
+
                         if R < 5000: # prevent drawing extremely large circles
                             fit_circle = (int(xc), int(yc), int(R))
                             
